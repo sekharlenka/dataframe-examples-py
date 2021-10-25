@@ -21,6 +21,11 @@ if __name__ == '__main__':
     secret = open(app_secrets_path)
     app_secret = yaml.load(secret, Loader=yaml.FullLoader)
 
+    # Setup spark to use s3
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    hadoop_conf.set("fs.s3a.access.key", app_secret["s3_conf"]["access_key"])
+    hadoop_conf.set("fs.s3a.secret.key", app_secret["s3_conf"]["secret_access_key"])
+
     ol_txn_df = spark.read\
         .format("com.springml.spark.sftp")\
         .option("host", app_secret["sftp_conf"]["hostname"])\
@@ -32,5 +37,11 @@ if __name__ == '__main__':
         .load(app_conf["sftp_conf"]["directory"] + "/receipts_delta_GBR_14_10_2017.csv")
 
     ol_txn_df.show(5, False)
+
+    ol_txn_df \
+        .repartition(1) \
+        .write \
+        .mode("overwrite") \
+        .parquet("s3a://" + app_conf["s3_conf"]["s3_bucket"] + "/sftp_reciept")
 
 # spark-submit --packages "com.springml:spark-sftp_2.11:1.1.1" dataframe/ingestion/others/systems/sftp_df.py
